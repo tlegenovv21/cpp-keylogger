@@ -16,8 +16,8 @@ A lightweight, stealthy keystroke logger built in **C++** using the Windows API 
     * `GetForegroundWindow()` and `GetWindowTextA()` for context extraction.
     * `AllocConsole()` and `ShowWindow()` for process stealthing.
 
-## ⚠️ Disclaimer
-**Educational Use Only.** This software is designed for authorized security research and "Red Team" simulations. Installing keyloggers on computers without permission is illegal.
+## Disclaimer
+**Educational Use Only.** This software is designed for authorized security research and "Red Team" simulations.
 
 ---
-*Built by [Ilyas Tlegenov](https://github.com/YOUR_USERNAME)*
+*Built by [Ilyas Tlegenov](https://github.com/tlegenovv21)*
